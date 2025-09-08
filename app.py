@@ -58,7 +58,7 @@ def append_log(row):
 st.set_page_config(page_title="Latency-Controlled Chatbot", layout="centered")
 st.title("Chatbot Experiment Demo")
 
-qp = st.experimental_get_query_params()
+qp = st.query_params
 participant_id = qp.get("pid", [""])[0] or "anon"
 
 persona = qp.get("persona", ["ai_clear"])[0]

@@ -4,19 +4,18 @@ import random
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-import openai
+import google.generativeai as genai
 
 # ---------------- Config ----------------
 LOCAL_LOG = "chat_logs.csv"
-DEFAULT_MODEL = "gpt-3.5-turbo"
+DEFAULT_MODEL = "gemini-1.5-flash"   # free-tier model
 
 # ---------------- Helpers ----------------
-def get_openai_api_key():
-    # Streamlit Cloud: use secrets manager
+def get_gemini_api_key():
     try:
-        return st.secrets["OPENAI_API_KEY"]
+        return st.secrets["GEMINI_API_KEY"]
     except Exception:
-        return os.environ.get("OPENAI_API_KEY")
+        return os.environ.get("GEMINI_API_KEY")
 
 def build_system_prompt(persona):
     if persona == "ai_clear":
@@ -32,20 +31,18 @@ def build_system_prompt(persona):
     else:
         return "You are a concise chat partner. Reply using short, clear sentences."
 
-def generate_reply(api_key, user_text, persona, model=DEFAULT_MODEL, temp=0.6, max_tokens=120):
-    openai.api_key = api_key
-    messages = [
-        {"role": "system", "content": build_system_prompt(persona)},
-        {"role": "user", "content": user_text}
-    ]
-    resp = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        temperature=temp,
-        max_tokens=max_tokens,
-        n=1
+def generate_reply(api_key, user_text, persona, model=DEFAULT_MODEL, temp=0.7):
+    genai.configure(api_key=api_key)
+    system_prompt = build_system_prompt(persona)
+    chat = genai.GenerativeModel(model)
+    resp = chat.generate_content(
+        f"{system_prompt}\n\nUser: {user_text}\nPartner:",
+        generation_config=genai.types.GenerationConfig(
+            temperature=temp,
+            max_output_tokens=120
+        )
     )
-    return resp["choices"][0]["message"]["content"].strip()
+    return resp.text.strip() if resp and resp.text else "[No response]"
 
 def append_log(row):
     df = pd.DataFrame([row])
@@ -55,26 +52,31 @@ def append_log(row):
         df.to_csv(LOCAL_LOG, mode="a", header=False, index=False)
 
 # ---------------- Streamlit UI ----------------
-st.set_page_config(page_title="Latency-Controlled Chatbot", layout="centered")
+st.set_page_config(page_title="Chatbot Experiment Demo", layout="centered")
 st.title("Chatbot Experiment Demo")
 
+# Grab participant info from URL
 qp = st.query_params
 participant_id = qp.get("pid", [""])[0] or "anon"
-
 persona = qp.get("persona", ["ai_clear"])[0]
 latency = qp.get("latency", ["fast"])[0]
 
+# Initialize chat state
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    # Add intro message
+    intro_msg = "Hi 👋 I’m your chat partner. Ready to talk?"
+    t_intro = datetime.utcnow().isoformat()
+    st.session_state.messages.append({"role": "bot", "text": intro_msg, "time": t_intro})
 
+# Chat input
 user_input = st.text_input("You:", key="input")
 if st.button("Send") and user_input.strip():
-    # Save user msg
     t_user = datetime.utcnow().isoformat()
-    st.session_state.messages.append({"role":"user","text":user_input,"time":t_user})
+    st.session_state.messages.append({"role": "user", "text": user_input, "time": t_user})
     st.markdown(f"**You:** {user_input}")
 
-    # Delay
+    # Latency condition
     if latency == "fast":
         delay = random.uniform(0.5, 1.0)
     elif latency == "slow":
@@ -85,13 +87,14 @@ if st.button("Send") and user_input.strip():
     with st.spinner("Partner is typing..."):
         time.sleep(delay)
 
-    api_key = get_openai_api_key()
+    api_key = get_gemini_api_key()
     reply = generate_reply(api_key, user_input, persona) if api_key else "[No API key found]"
     t_bot = datetime.utcnow().isoformat()
 
-    st.session_state.messages.append({"role":"bot","text":reply,"time":t_bot})
+    st.session_state.messages.append({"role": "bot", "text": reply, "time": t_bot})
     st.markdown(f"**Partner:** {reply}")
 
+    # Log row
     row = {
         "pid": participant_id,
         "user_time": t_user,
@@ -103,8 +106,9 @@ if st.button("Send") and user_input.strip():
     }
     append_log(row)
 
+# Display history
 st.markdown("---")
 st.subheader("Chat history")
 for m in st.session_state.messages:
-    who = "You" if m["role"]=="user" else "Partner"
+    who = "You" if m["role"] == "user" else "Partner"
     st.write(f"**{who}** ({m['time']}): {m['text']}")

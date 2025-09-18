@@ -72,7 +72,7 @@ condition = qp.get("condition", ["acceptance"])[0]  # acceptance / ambiguous / r
 # Intro message by condition
 intro_messages = {
     "acceptance": "Hey 👋 I’m Taylor. Excited to chat with you!",
-    "ambiguous": "Hey, I’m Jordan. We can chat if you want, I guess.",
+    "ambiguous": "Hey, I’m Sam. We can chat if you'd like.",
     "rejection": "Yeah, I’m Casey. What’s up.",
 }
 if "messages" not in st.session_state:

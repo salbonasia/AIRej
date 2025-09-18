@@ -27,7 +27,7 @@ def build_system_prompt(condition):
         )
     elif condition == "ambiguous":
         return (
-            "You are 'Jordan', a somewhat neutral chat partner. "
+            "You are 'Sam', a somewhat neutral chat partner. "
             "Reply in a vague or hedgy way, not fully committed. "
             "Keep sentences short, sometimes noncommittal (e.g., 'maybe', 'not sure')."
         )
